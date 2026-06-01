@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PoC: Clickjacking OTP Capture</title>
+  <style>
+    body { font-family: monospace; background: #1a1a2e; color: #eee; padding: 20px; }
+    h1 { color: #e94560; }
+    .status { background: #16213e; padding: 20px; border-radius: 8px; margin: 20px 0; }
+    .status.pass { border-left: 4px solid #0f3460; }
+    .status.fail { border-left: 4px solid #e94560; }
+    .proof-box { background: #0f3460; padding: 15px; border-radius: 4px; margin: 10px 0; }
+    code { color: #00d2ff; }
+    iframe { border: 2px dashed #e94560; margin: 10px 0; width: 440px; height: 300px; }
+    .screenshot { color: #aaa; font-style: italic; }
+  </style>
+</head>
+<body>
+  <h1>PoC: Clickjacking OTP Capture (Chain 2)</h1>
+  <p>Validates that the Angular OTP app can be embedded in a 3rd-party iframe.</p>
+
+  <div class="status fail">
+    <strong>VULNERABLE:</strong> App renders inside iframe. No X-Frame-Options or CSP frame-ancestors blocking it.
+  </div>
+
+  <div class="proof-box">
+    <strong>Proof by demonstration:</strong> The OTP app is loaded in the iframe below.
+    <br><em class="screenshot">(Replace src with the deployed URL of the OTP app)</em>
+  </div>
+
+  <iframe src="http://localhost:4200" title="OTP App - Embedded via iframe"></iframe>
+
+  <h2>Reproduction Steps</h2>
+  <ol>
+    <li><strong>Serve the OTP app:</strong> <code>cd hero-otp-app && ng serve</code></li>
+    <li>Open this HTML file in a browser</li>
+    <li>Observe that the OTP app loads inside the iframe without any restrictions</li>
+    <li>An attacker can overlay fake input fields over the iframe to capture keystrokes</li>
+  </ol>
+
+  <h2>Evidence from Source</h2>
+  <div class="proof-box">
+    <p><strong>built index.html</strong> — no X-Frame-Options, no CSP frame-ancestors:</p>
+    <pre><code>&lt;!doctype html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+  &lt;meta charset="utf-8"&gt;
+  &lt;title&gt;OTP Verification - Hero&lt;/title&gt;
+  &lt;base href="/"&gt;
+  &lt;meta name="viewport" content="width=device-width, initial-scale=1"&gt;
+  &lt;!-- NO CSP --&gt;
+  &lt;!-- NO X-Frame-Options --&gt;
+  &lt;!-- NO frame-ancestors --&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;app-root&gt;&lt;/app-root&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+  </div>
+
+  <hr>
+  <p><em>This PoC validates that the app is framable, enabling clickjacking attacks.</em></p>
+</body>
+</html>
